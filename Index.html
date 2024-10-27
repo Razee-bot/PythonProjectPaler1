@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appointment Scheduler</title>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css">
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <style>
+        /* General styles for the body */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #e0f7fa; /* Light blue background */
+        }
+        /* Centered headings */
+        h1, h2 {
+            text-align: center;
+            color: #00796b; /* Darker shade for headings */
+            margin-bottom: 10px;
+        }
+        /* Container for the main content */
+        .main-container {
+            display: flex;
+            justify-content: center;
+            width: 90%;
+            max-width: 800px; /* Adjust max-width as needed */
+            margin: 20px auto;
+        }
+        /* Form container */
+        .form-container {
+            width: 100%; /* Use full width of the container */
+            padding: 15px;
+            background: #ffffff; /* White background for the form */
+            border-radius: 6px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.1);
+        }
+        /* Form labels and inputs */
+        label {
+            display: block;
+            margin: 5px 0;
+            font-weight: normal;
+            color: #555;
+        }
+        input[type="text"], input[type="date"], input[type="time"] {
+            width: calc(100% - 16px);
+            padding: 8px;
+            margin: 4px 0 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        /* Button styles */
+        button {
+            padding: 8px 16px;
+            background: #4fc3f7; /* Sky blue for buttons */
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 8px;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background: #29b6f6; /* Darker sky blue on hover */
+        }
+        /* Modal styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 6px;
+            width: 80%;
+            max-width: 800px;
+        }
+        .modal-header, .modal-footer {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .modal-header h2 {
+            margin: 0;
+        }
+        .modal-footer {
+            border-top: 1px solid #ddd;
+            text-align: right;
+        }
+        /* Mobile view adjustments */
+        @media (max-width: 768px) {
+            .modal {
+                display: flex; /* Show modal on mobile */
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Modal -->
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeModal()">&times;</span>
+                <h2>Your Appointment Schedule</h2>
+            </div>
+            <div class="modal-body">
+                <button id="sort-button" onclick="sortByDate()">Sort by Date & Time</button>
+                <table id="schedule-list">
+                    <thead>
+                        <tr>
+                            <th>Patient's Name</th>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Form to Add/Update Appointment -->
+        <div class="form-container">
+            <h2>Manage Your Appointments</h2>
+            <label for="title">Patient's Name:</label>
+            <input type="text" id="title" placeholder="Enter patient's name">
+
+            <label for="date">Date:</label>
+            <input type="date" id="date"> <!-- Removed readonly attribute -->
+
+            <label for="time">Time:</label>
+            <input type="time" id="time">
+
+            <button id="action-button" onclick="handleAction()">Add Appointment</button>
+            <button id="open-modal" onclick="openModal()">View Appointments</button>
+
+            <!-- Button to fetch current date and time -->
+            <button id="current-time-button">Get Current Date and Time</button>
+            <p id="current-time" style="text-align: center;"></p>
+        </div>
+    </div>
+
+    <py-script>
+    from datetime import datetime
+    from js import document, alert
+
+    def get_current_time(event):
+        # Get the current date and time
+        now = datetime.now()
+        current_date = now.strftime("%Y-%m-%d")
+        current_time = now.strftime("%H:%M")
+        # Update the current time paragraph
+        document.getElementById('current-time').innerText = f"Current Date and Time: {now.strftime('%Y-%m-%d %H:%M:%S')}"
+        # Set the current date and time in the input fields
+        document.getElementById('date').value = current_date
+        document.getElementById('time').value = current_time
+
+    def display_message(message):
+        alert(message)
+
+    def add_appointment():
+        title = document.getElementById("title").value
+        date = document.getElementById("date").value
+        time = document.getElementById("time").value
+
+        if not validate_appointment(title, date, time):
+            return
+
+        schedule = get_schedule()
+        # Check for conflicts
+        hasConflict = any(appointment.date == date and appointment.time == time for appointment in schedule)
+        if hasConflict:
+            display_message("Conflict: This appointment time is already booked.")
+            return
+
+        schedule.append({'title': title, 'date': date, 'time': time})
+        save_schedule(schedule)
+        display_message("Appointment added successfully!")  # Notify success
+        clear_form()
+        display_schedule()  # Refresh the schedule
+
+    def remove_appointment(index):
+        schedule = get_schedule()
+        if index < len(schedule):
+            schedule.pop(index)
+            save_schedule(schedule)
+            display_message("Appointment removed successfully!")  # Notify success
+            display_schedule()  # Refresh the schedule
+
+    # Attach the calculation function to the button click
+    document.getElementById("current-time-button").onclick = get_current_time
+</py-script>
+
+
+    <script>
+        function openModal() {
+            document.getElementById("scheduleModal").style.display = "flex";
+            display_schedule();  // Refresh the schedule when opening the modal
+        }
+
+        function closeModal() {
+            document.getElementById("scheduleModal").style.display = "none";
+        }
+
+        function get_schedule() {
+            return JSON.parse(localStorage.getItem('schedule')) || [];
+        }
+
+        function save_schedule(schedule) {
+            localStorage.setItem('schedule', JSON.stringify(schedule));
+        }
+
+        function display_schedule() {
+            const schedule = get_schedule();
+            const tbody = document.querySelector('#schedule-list tbody');
+            tbody.innerHTML = ""; // Clear existing content
+            schedule.forEach((appointment, index) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${appointment.title}</td>
+                        <td>${appointment.date}</td>
+                        <td>${appointment.time}</td>
+                        <td><button onclick="remove_appointment(${index})">Delete</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function add_appointment() {
+            const title = document.getElementById("title").value;
+            const date = document.getElementById("date").value;
+            const time = document.getElementById("time").value;
+
+            if (title && date && time) {
+                const schedule = get_schedule();
+                // Check for conflicts
+                const hasConflict = schedule.some(appointment => appointment.date === date && appointment.time === time);
+                if (hasConflict) {
+                    alert("Conflict: This appointment time is already booked.");
+                    return;
+                }
+
+                schedule.push({ title, date, time });
+                save_schedule(schedule);
+                display_schedule();
+                send_reminder(title, date, time);  // Send a reminder
+                clear_form();
+            } else {
+                alert("Please fill out all fields.");
+            }
+        }
+
+        function clear_form() {
+            document.getElementById("title").value = '';
+            document.getElementById("date").value = '';
+            document.getElementById("time").value = '';
+        }
+
+        function remove_appointment(index) {
+            const schedule = get_schedule();
+            schedule.splice(index, 1);
+            save_schedule(schedule);
+            display_schedule();
+        }
+
+        function handleAction() {
+            add_appointment();
+        }
+
+        function sortByDate() {
+            let schedule = get_schedule();
+            schedule.sort((a, b) => new Date(a.date + ' ' + a.time) - new Date(b.date + ' ' + b.time));
+            save_schedule(schedule);
+            display_schedule();
+        }
+
+        function send_reminder(title, date, time) {
+            const appointmentTime = new Date(date + ' ' + time);
+            const currentTime = new Date();
+            const timeDifference = appointmentTime - currentTime;
+
+            if (timeDifference > 0) {
+                setTimeout(() => {
+                    alert(`Reminder: You have an appointment with ${title} at ${time} on ${date}.`);
+                }, timeDifference);
+            }
+        }
+    </script>
+</body>
+</html>
